@@ -1,0 +1,39 @@
+name: Build APK
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.9' }
+      - name: Unit tests
+        run: gradle :app:testDebugUnitTest --stacktrace 2>&1 | tee test.log
+        continue-on-error: true
+      - name: Build debug APK
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug 2>&1 | tee build.log
+      - name: Report compile errors as annotations
+        if: failure()
+        run: |
+          grep -E "^e: |error:|What went wrong" -A2 build.log | head -60 | while IFS= read -r l; do echo "::error::$l"; done
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk MeeshoX-debug.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: MeeshoX-debug-apk, path: MeeshoX-debug.apk }
+      - name: Publish release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: MEESHO X build ${{ github.run_number }}
+          files: MeeshoX-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

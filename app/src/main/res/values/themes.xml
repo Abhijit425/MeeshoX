@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.MeeshoX" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#5B21B6</item>
+        <item name="android:windowBackground">#FFF7F4FB</item>
+    </style>
+</resources>
