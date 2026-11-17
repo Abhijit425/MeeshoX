@@ -15,6 +15,7 @@ import com.meeshox.app.data.ReviewEntity
 import com.meeshox.app.domain.OrderLifecycle
 import com.meeshox.app.domain.PasswordHasher
 import com.meeshox.app.domain.PaymentMethod
+import com.meeshox.app.domain.Payer
 import com.meeshox.app.domain.Pricing
 import com.meeshox.app.domain.SandboxPaymentProvider
 import com.meeshox.app.domain.Serviceability
@@ -94,9 +95,9 @@ class CoreLogicTest {
 
     @Test fun sandboxPaymentOutcomes() = runTest {
         val p = SandboxPaymentProvider()
-        assertEquals("PAID", p.pay(100.0, PaymentMethod.UPI, "ok@upi").status)
-        assertFalse(p.pay(100.0, PaymentMethod.UPI, "fail@upi").success)
-        assertEquals("COD_PENDING", p.pay(100.0, PaymentMethod.COD, "").status)
+        assertEquals("PAID", p.pay(100.0, PaymentMethod.UPI, Payer("ok@upi")).status)
+        assertFalse(p.pay(100.0, PaymentMethod.UPI, Payer("fail@upi")).success)
+        assertEquals("COD_PENDING", p.pay(100.0, PaymentMethod.COD, Payer()).status)
     }
 
     @Test fun orderLifecycle() {

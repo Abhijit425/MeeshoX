@@ -15,6 +15,9 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Public Razorpay key ID + payment server URL can be injected at build time (GitHub secrets). Never the key secret.
+        buildConfigField("String", "RAZORPAY_KEY_ID", "\"${System.getenv("RAZORPAY_KEY_ID") ?: ""}\"")
+        buildConfigField("String", "PAYMENT_SERVER_URL", "\"${System.getenv("PAYMENT_SERVER_URL") ?: ""}\"")
     }
     buildTypes {
         debug { buildConfigField("Boolean", "DEMO_SEED", "true") }
@@ -52,6 +55,7 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("com.razorpay:checkout:1.6.40")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")

@@ -132,6 +132,7 @@ fun MainShell(vm: ShopViewModel) {
             composable("memory") { ShoppingMemoryScreen(vm, nav) }
             composable("reorder") { SmartReorderScreen(vm, nav) }
             composable("admin") { AdminLiteScreen(vm, nav) }
+            composable("payment_settings") { PaymentSettingsScreen(vm, nav) }
         }
     }
 }

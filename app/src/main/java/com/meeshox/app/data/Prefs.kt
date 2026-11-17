@@ -24,7 +24,9 @@ data class UserPrefs(
     val preferredSize: String = "",
     val budget: String = "",
     val gridLayout: Boolean = true,
-    val consentGiven: Boolean = false
+    val consentGiven: Boolean = false,
+    val razorpayKeyId: String = "",
+    val paymentServerUrl: String = ""
 )
 
 class Prefs(private val context: Context) {
@@ -40,6 +42,8 @@ class Prefs(private val context: Context) {
         val budget = stringPreferencesKey("budget")
         val grid = booleanPreferencesKey("grid")
         val consent = booleanPreferencesKey("consent")
+        val rzpKey = stringPreferencesKey("rzp_key_id")
+        val payServer = stringPreferencesKey("pay_server_url")
     }
 
     val flow: Flow<UserPrefs> = context.dataStore.data.map { p: Preferences ->
@@ -54,7 +58,9 @@ class Prefs(private val context: Context) {
             preferredSize = p[K.size] ?: "",
             budget = p[K.budget] ?: "",
             gridLayout = p[K.grid] ?: true,
-            consentGiven = p[K.consent] ?: false
+            consentGiven = p[K.consent] ?: false,
+            razorpayKeyId = p[K.rzpKey] ?: "",
+            paymentServerUrl = p[K.payServer] ?: ""
         )
     }
 
@@ -71,5 +77,6 @@ class Prefs(private val context: Context) {
     suspend fun setMemory(brands: String, size: String, budget: String) = context.dataStore.edit {
         it[K.brands] = brands; it[K.size] = size; it[K.budget] = budget
     }
+    suspend fun setGateway(keyId: String, serverUrl: String) = context.dataStore.edit { it[K.rzpKey] = keyId; it[K.payServer] = serverUrl }
     suspend fun clearAll() = context.dataStore.edit { it.clear() }
 }

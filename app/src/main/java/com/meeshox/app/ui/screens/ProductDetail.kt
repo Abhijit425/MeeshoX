@@ -174,7 +174,7 @@ fun ProductDetailScreen(vm: ShopViewModel, nav: NavHostController, id: Long) {
                         Text(pinResult ?: "Usually delivered in ${p.deliveryDays}-${p.deliveryDays + 2} days", style = MaterialTheme.typography.bodySmall)
                         HorizontalDivider(Modifier.padding(vertical = 8.dp))
                         Text(if (p.returnDays > 0) "↩ ${p.returnDays}-day easy returns & exchange" else "↩ This item is not returnable", style = MaterialTheme.typography.bodySmall)
-                        Text("💳 UPI, cards, net banking, wallets & cash on delivery (sandbox)", style = MaterialTheme.typography.bodySmall)
+                        Text("💳 UPI, cards, net banking, wallets (Razorpay) & cash on delivery", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

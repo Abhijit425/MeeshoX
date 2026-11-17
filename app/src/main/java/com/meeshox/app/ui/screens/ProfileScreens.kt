@@ -80,6 +80,7 @@ fun ProfileScreen(vm: ShopViewModel, nav: NavHostController) {
 
         Section("Business")
         Item(Icons.Outlined.Storefront, if (seller == null) "Become a seller" else "Seller dashboard", seller?.let { "${it.businessName}" + if (it.verified) "" else " · verification pending" }) { nav.go("seller") }
+        Item(Icons.Outlined.Payments, "Payment gateway", "Connect Razorpay (key ID & verification server)") { nav.go("payment_settings") }
         Item(Icons.Outlined.AdminPanelSettings, "Admin overview (local)", "Analytics & fraud flags from this device's data") { nav.go("admin") }
 
         Section("Account")
@@ -156,7 +157,7 @@ private fun supportReply(text: String, orders: List<com.meeshox.app.data.OrderEn
         Regex("return|exchange|size").containsMatchIn(t) -> "You can return or exchange delivered items within the product's return window: Orders → select order → Return / exchange. The assistant checks eligibility automatically." to false
         Regex("cancel").containsMatchIn(t) -> "Orders can be cancelled before they ship: Orders → select order → Cancel. Prepaid amounts are refunded automatically." to false
         Regex("complain|damaged|broken|wrong|fake|bad").containsMatchIn(t) -> "Sorry about that. I've registered a complaint ticket so our team can review it." to true
-        Regex("pay|upi|card|cod").containsMatchIn(t) -> "This build uses a payment sandbox — no real charges. Supported: UPI, cards, net banking, wallets and COD." to false
+        Regex("pay|upi|card|cod").containsMatchIn(t) -> "Online payments go through Razorpay (UPI, cards, net banking, wallets) when a key is configured; otherwise a sandbox is used. Cash on delivery is also available." to false
         else -> "I can help with order tracking, returns, refunds, cancellations and complaints. Type \"talk to a human\" to escalate." to false
     }
 }

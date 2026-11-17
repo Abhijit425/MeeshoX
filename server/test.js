@@ -1,0 +1,12 @@
+const assert = require('assert');
+const crypto = require('crypto');
+const { verifyPaymentSignature, verifyWebhook } = require('./index.js');
+const secret = 'test_secret';
+const sig = crypto.createHmac('sha256', secret).update('order_ABC|pay_XYZ').digest('hex');
+assert.strictEqual(verifyPaymentSignature('order_ABC', 'pay_XYZ', sig, secret), true);
+assert.strictEqual(verifyPaymentSignature('order_ABC', 'pay_OTHER', sig, secret), false);
+assert.strictEqual(verifyPaymentSignature('order_ABC', 'pay_XYZ', 'short', secret), false);
+const body = '{"event":"payment.captured"}';
+assert.strictEqual(verifyWebhook(body, crypto.createHmac('sha256', 'wh').update(body).digest('hex'), 'wh'), true);
+assert.strictEqual(verifyWebhook(body + ' ', crypto.createHmac('sha256', 'wh').update(body).digest('hex'), 'wh'), false);
+console.log('server tests passed');

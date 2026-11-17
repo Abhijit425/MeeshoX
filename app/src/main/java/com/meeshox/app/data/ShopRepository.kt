@@ -20,7 +20,17 @@ sealed class Outcome<out T> {
  * Single source of truth for the app. This build is LOCAL-FIRST: Room is the data store.
  * The same interface is designed to be backed by the REST API (see docs/ARCHITECTURE.md) once deployed.
  */
-class ShopRepository(val dao: ShopDao, val prefs: Prefs, val payments: PaymentProvider) {
+class ShopRepository(val dao: ShopDao, val prefs: Prefs, val payments: PaymentProvider, val gateway: com.meeshox.app.payments.RazorpayProvider) {
+
+    /** Razorpay for online methods when a key is configured; sandbox otherwise. COD never touches a gateway. */
+    suspend fun gatewayConfig(): com.meeshox.app.payments.GatewayConfig {
+        val p = prefs.current()
+        return com.meeshox.app.payments.GatewayConfig(p.razorpayKeyId.ifBlank { com.meeshox.app.BuildConfig.RAZORPAY_KEY_ID }, p.paymentServerUrl.ifBlank { com.meeshox.app.BuildConfig.PAYMENT_SERVER_URL })
+    }
+    private suspend fun providerFor(method: PaymentMethod): PaymentProvider =
+        if (method != PaymentMethod.COD && gatewayConfig().configured) gateway else payments
+    private fun providerForRef(ref: String): PaymentProvider = if (ref.startsWith("pay_")) gateway else payments
+
 
     // ---------------- Auth ----------------
     suspend fun register(name: String, phone: String, email: String, password: String): Outcome<Long> {
@@ -109,15 +119,17 @@ class ShopRepository(val dao: ShopDao, val prefs: Prefs, val payments: PaymentPr
         val b = Pricing.breakdown(items.map { Triple(products[it.productId]!!.price, products[it.productId]!!.mrp, it.quantity) }, coupon, express)
         if (method == PaymentMethod.COD && b.total > 50_000) return Outcome.Err("COD is limited to orders up to ₹50,000")
 
-        val pay = payments.pay(b.total, method, payerHandle)
+        val provider = providerFor(method)
+        val payer = dao.user(uid).let { u -> com.meeshox.app.domain.Payer(payerHandle, u?.name ?: "", u?.phone ?: "", u?.email ?: "", "${items.sumOf { it.quantity }} item(s) on MEESHO X") }
+        val pay = provider.pay(b.total, method, payer)
         if (!pay.success) {
-            dao.audit(AuditLogEntity(userId = uid, action = "PAYMENT_FAILED", detail = "${method.name} ${pay.reference}"))
-            return Outcome.Err("Payment failed: ${pay.message}")
+            dao.audit(AuditLogEntity(userId = uid, action = "PAYMENT_FAILED", detail = "${provider.name} ${method.name} ${pay.status} ${pay.reference}"))
+            return Outcome.Err(if (pay.status == "VERIFICATION_FAILED") pay.message else "Payment failed: ${pay.message}")
         }
         // reserve stock atomically per item
         for (i in items) if (dao.decrementStock(i.productId, i.quantity) == 0) {
-            payments.refund(pay.reference, b.total)
-            return Outcome.Err("Stock changed during checkout. Payment reversed (sandbox).")
+            val r = provider.refund(pay.reference, b.total)
+            return Outcome.Err("Stock changed during checkout. ${r.message}")
         }
         val user = dao.user(uid)
         val accountAgeDays = user?.let { (System.currentTimeMillis() - it.createdAt) / 86_400_000 } ?: 0
@@ -149,7 +161,7 @@ class ShopRepository(val dao: ShopDao, val prefs: Prefs, val payments: PaymentPr
         dao.orderItems(o.id).forEach { dao.incrementStock(it.productId, it.quantity) }
         var payStatus = o.paymentStatus
         var msg = "Order cancelled."
-        if (o.paymentStatus == "PAID") { val r = payments.refund(o.paymentRef, o.total); payStatus = r.status; msg += " ${r.message}." }
+        if (o.paymentStatus == "PAID" || o.paymentStatus == "PAID_UNVERIFIED") { val r = providerForRef(o.paymentRef).refund(o.paymentRef, o.total); payStatus = r.status; msg += " ${r.message}." }
         dao.updateOrder(o.copy(status = "CANCELLED", paymentStatus = payStatus, updatedAt = System.currentTimeMillis()))
         dao.insertNotification(NotificationEntity(userId = o.userId, title = "Order #${o.id} cancelled", body = msg))
         return Outcome.Ok(msg)
@@ -163,7 +175,7 @@ class ShopRepository(val dao: ShopDao, val prefs: Prefs, val payments: PaymentPr
         if (!OrderLifecycle.canReturn(current, deliveredAt, minReturn)) {
             return Outcome.Err(if (minReturn == 0) "Items in this order are not returnable" else if (current != "DELIVERED") "Returns open after delivery" else "Return window of $minReturn days has passed")
         }
-        val refund = if (exchange || o.paymentStatus == "COD_PENDING") null else payments.refund(o.paymentRef, o.total)
+        val refund = if (exchange || o.paymentStatus == "COD_PENDING") null else providerForRef(o.paymentRef).refund(o.paymentRef, o.total)
         dao.updateOrder(o.copy(status = "RETURN_REQUESTED", paymentStatus = refund?.status ?: o.paymentStatus, updatedAt = System.currentTimeMillis()))
         dao.insertTicket(SupportTicketEntity(userId = o.userId, orderId = o.id, subject = if (exchange) "Exchange request" else "Return request", message = reason))
         val msg = if (exchange) "Exchange requested. Pickup will be scheduled once a logistics provider is configured." else "Return requested. ${refund?.message ?: "Refund to bank/UPI after pickup."}"

@@ -111,13 +111,16 @@ fun Double.rupees(): String {
 
 enum class PaymentMethod(val label: String) { UPI("UPI"), CREDIT_CARD("Credit card"), DEBIT_CARD("Debit card"), NET_BANKING("Net banking"), WALLET("Wallet"), COD("Cash on delivery") }
 
-data class PaymentResult(val success: Boolean, val status: String, val reference: String, val message: String)
+data class PaymentResult(val success: Boolean, val status: String, val reference: String, val message: String, val provider: String = "SANDBOX")
+
+/** Who is paying — used for gateway prefill. Never contains card data. */
+data class Payer(val handle: String = "", val name: String = "", val phone: String = "", val email: String = "", val description: String = "")
 
 /** Abstraction so a real gateway (Razorpay, Cashfree, PayU …) can be plugged in server-side. */
 interface PaymentProvider {
     val name: String
     val isSandbox: Boolean
-    suspend fun pay(amount: Double, method: PaymentMethod, payerHandle: String): PaymentResult
+    suspend fun pay(amount: Double, method: PaymentMethod, payer: Payer): PaymentResult
     suspend fun refund(reference: String, amount: Double): PaymentResult
 }
 
@@ -129,7 +132,8 @@ interface PaymentProvider {
 class SandboxPaymentProvider : PaymentProvider {
     override val name = "MEESHO X Sandbox"
     override val isSandbox = true
-    override suspend fun pay(amount: Double, method: PaymentMethod, payerHandle: String): PaymentResult {
+    override suspend fun pay(amount: Double, method: PaymentMethod, payer: Payer): PaymentResult {
+        val payerHandle = payer.handle
         kotlinx.coroutines.delay(900)
         val ref = "SBX" + System.currentTimeMillis().toString().takeLast(9)
         if (method == PaymentMethod.COD) return PaymentResult(true, "COD_PENDING", ref, "Pay ${amount.rupees()} on delivery")

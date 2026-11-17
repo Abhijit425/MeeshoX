@@ -180,6 +180,9 @@ fun CheckoutScreen(vm: ShopViewModel, nav: NavHostController, buyNowId: Long, bu
     var express by remember { mutableStateOf(false) }
     var method by remember { mutableStateOf(PaymentMethod.UPI) }
     var handle by remember { mutableStateOf("success@sandbox") }
+    var gw by remember { mutableStateOf<com.meeshox.app.payments.GatewayConfig?>(null) }
+    LaunchedEffect(Unit) { gw = vm.repo.gatewayConfig() }
+    val live = gw?.configured == true
     var couponCode by remember { mutableStateOf(vm.pendingCoupon) }
     var placing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -201,7 +204,7 @@ fun CheckoutScreen(vm: ShopViewModel, nav: NavHostController, buyNowId: Long, bu
                 error?.let { Text(it, color = DealRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 6.dp)) }
                 Button(onClick = {
                     val a = address ?: run { error = "Add a delivery address"; return@Button }
-                    if (method in listOf(PaymentMethod.UPI) && !handle.contains("@")) { error = "Enter a UPI ID like name@bank"; return@Button }
+                    if (!live && method == PaymentMethod.UPI && !handle.contains("@")) { error = "Enter a UPI ID like name@bank"; return@Button }
                     placing = true; error = null
                     vm.io {
                         val r = vm.repo.placeOrder(uid, a, coupon?.code, express, method, handle, buyNow)
@@ -212,8 +215,8 @@ fun CheckoutScreen(vm: ShopViewModel, nav: NavHostController, buyNowId: Long, bu
                         }
                     }
                 }, enabled = !placing && b != null && svc?.serviceable != false, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                    if (placing) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); Text("  Processing sandbox payment…") }
-                    else Text(if (method == PaymentMethod.COD) "Place order · ${b?.total?.rupees() ?: ""}" else "Pay ${b?.total?.rupees() ?: ""}")
+                    if (placing) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); Text(if (live && method != PaymentMethod.COD) "  Waiting for Razorpay…" else "  Placing order…") }
+                    else Text(if (method == PaymentMethod.COD) "Place order · ${b?.total?.rupees() ?: ""}" else "Pay ${b?.total?.rupees() ?: ""}" + if (live) " with Razorpay" else " (sandbox)")
                 }
             }
         }
@@ -267,8 +270,16 @@ fun CheckoutScreen(vm: ShopViewModel, nav: NavHostController, buyNowId: Long, bu
             b?.let { PriceDetails(it, lines.sumOf { l -> l.quantity }, express) }
 
             Step("4", "Payment")
-            Surface(color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f), shape = RoundedCornerShape(12.dp)) {
-                Text("SANDBOX MODE — no real money is charged. No payment gateway is configured in this build. Card numbers and CVVs are never collected or stored. Use a UPI ID containing \"fail\" to test a declined payment.",
+            val g = gw
+            Surface(color = (if (live) Mint else MaterialTheme.colorScheme.tertiary).copy(alpha = 0.15f), shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().clickable { nav.go("payment_settings") }) {
+                Text(
+                    when {
+                        g == null -> "Checking payment gateway…"
+                        !g.configured -> "SANDBOX MODE — no Razorpay key set, so no real money is charged. Tap to connect Razorpay. (A UPI ID containing \"fail\" simulates a decline.)"
+                        g.testMode -> "Razorpay TEST mode — real gateway, test money. Use Razorpay test cards/UPI (e.g. success@razorpay)." + if (g.hasServer) " Server verification ON." else " No verification server."
+                        else -> "Razorpay LIVE — real money will be charged." + if (g.hasServer) " Payments are verified by your server." else " ⚠ No verification server configured."
+                    } + " Card details are entered only in Razorpay's secure checkout, never stored by MEESHO X.",
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(10.dp))
             }
             PaymentMethod.entries.forEach { m ->
@@ -279,10 +290,11 @@ fun CheckoutScreen(vm: ShopViewModel, nav: NavHostController, buyNowId: Long, bu
                 }
             }
             when (method) {
-                PaymentMethod.UPI -> OutlinedTextField(handle, { handle = it.trim() }, label = { Text("UPI ID (sandbox)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                PaymentMethod.CREDIT_CARD, PaymentMethod.DEBIT_CARD -> Text("In production, card details are entered on the gateway's PCI-DSS hosted page/SDK — never in this app. Sandbox will authorise the payment.", style = MaterialTheme.typography.bodySmall)
-                PaymentMethod.NET_BANKING -> Text("You'd be redirected to your bank via the gateway. Sandbox will authorise the payment.", style = MaterialTheme.typography.bodySmall)
-                PaymentMethod.WALLET -> Text("Wallet integration is provider-dependent. Sandbox will authorise the payment.", style = MaterialTheme.typography.bodySmall)
+                PaymentMethod.UPI -> if (live) Text("Razorpay checkout opens with UPI (apps, QR or UPI ID).", style = MaterialTheme.typography.bodySmall)
+                    else OutlinedTextField(handle, { handle = it.trim() }, label = { Text("UPI ID (sandbox)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                PaymentMethod.CREDIT_CARD, PaymentMethod.DEBIT_CARD -> Text(if (live) "Enter card details in Razorpay's PCI-DSS checkout (OTP/3-D Secure)." else "Sandbox will authorise the payment — no card details are asked for.", style = MaterialTheme.typography.bodySmall)
+                PaymentMethod.NET_BANKING -> Text(if (live) "Choose your bank in Razorpay checkout." else "Sandbox will authorise the payment.", style = MaterialTheme.typography.bodySmall)
+                PaymentMethod.WALLET -> Text(if (live) "Choose a wallet in Razorpay checkout." else "Sandbox will authorise the payment.", style = MaterialTheme.typography.bodySmall)
                 PaymentMethod.COD -> Text("Pay in cash or UPI at delivery.", style = MaterialTheme.typography.bodySmall)
             }
             Spacer(Modifier.height(80.dp))
@@ -369,7 +381,7 @@ fun OrderSuccessScreen(vm: ShopViewModel, nav: NavHostController, id: Long) {
         Text("Order placed!", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 12.dp))
         order?.let { o ->
             Text("Order #${o.id} · ${o.total.rupees()}", style = MaterialTheme.typography.titleMedium)
-            Text("Payment: ${o.paymentMethod.replace('_', ' ').lowercase()} · ${o.paymentStatus.replace('_', ' ').lowercase()} (sandbox ref ${o.paymentRef})", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+            Text("Payment: ${o.paymentMethod.replace('_', ' ').lowercase()} · ${o.paymentStatus.replace('_', ' ').lowercase()} · ${if (o.paymentRef.startsWith("pay_")) "Razorpay" else "sandbox"} ref ${o.paymentRef}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
             Text("Expected by ${fmtDate(o.expectedDelivery)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
         }
         Spacer(Modifier.height(24.dp))
