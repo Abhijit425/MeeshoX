@@ -1,6 +1,6 @@
 package com.meeshox.app.data
 
-import com.meeshox.app.ai.RiskScorer
+import com.meeshox.app.domain.RiskScorer
 import com.meeshox.app.domain.OrderLifecycle
 import com.meeshox.app.domain.PasswordHasher
 import com.meeshox.app.domain.PaymentMethod

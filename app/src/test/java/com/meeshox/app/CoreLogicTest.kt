@@ -6,7 +6,7 @@ import com.meeshox.app.ai.PriceIntelligence
 import com.meeshox.app.ai.QueryParser
 import com.meeshox.app.ai.Ranker
 import com.meeshox.app.ai.ReviewAnalyzer
-import com.meeshox.app.ai.RiskScorer
+import com.meeshox.app.domain.RiskScorer
 import com.meeshox.app.ai.SizeAdvisor
 import com.meeshox.app.data.CouponEntity
 import com.meeshox.app.data.PriceHistoryEntity
